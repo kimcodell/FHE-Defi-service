@@ -158,6 +158,9 @@ export function ActionsCard({ position, onActivity }: { position: Position; onAc
     return undefined;
   })();
 
+  // 빚은 0인데 담보가 잠겨 있으면 → 담보 돌려받기 안내
+  const canWithdraw = values.debt === 0n && values.collateral !== undefined && values.collateral > 0n;
+
   const borrowResult =
     kind === "borrow" && step === "done" && position.handles?.lastBorrowed !== borrowBefore
       ? values.lastBorrowed
@@ -185,6 +188,18 @@ export function ActionsCard({ position, onActivity }: { position: Position; onAc
       </div>
 
       <TabHelp kind={kind} position={position} />
+
+      {kind === "repay" && canWithdraw && (
+        <div className="nudge">
+          <p>
+            <strong>빚을 모두 갚았어요.</strong> 담보 {formatAmount(values.collateral!)} mETH는 아직 대출 풀에 잠겨 있어요.
+            돌려받기는 별도 거래예요.
+          </p>
+          <button className="btn primary" disabled={busy} onClick={() => selectTab("withdraw")}>
+            담보 돌려받으러 가기 →
+          </button>
+        </div>
+      )}
 
       {needsOperator ? (
         <div className="setup">
@@ -254,6 +269,8 @@ export function ActionsCard({ position, onActivity }: { position: Position; onAc
             ) : (
               <p className="badge bad">거절 — 한도를 넘어서 0원이 지급됐어요</p>
             )
+          ) : kind === "repay" && canWithdraw ? (
+            <p className="badge good">상환 완료 — 빚이 0이 됐어요</p>
           ) : (
             <p className="badge good">완료됐어요. 포지션이 갱신됐습니다.</p>
           )}
