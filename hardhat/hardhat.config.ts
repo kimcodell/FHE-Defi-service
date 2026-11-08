@@ -34,10 +34,10 @@ const config: HardhatUserConfig = {
   namedAccounts: {
     deployer: 0,
   },
+  // Etherscan API V2: 키 하나(문자열)로 모든 체인을 지원한다. 네트워크별 객체로 쓰면 종료된 V1 API로 요청이 간다.
+  //   npx hardhat vars set ETHERSCAN_API_KEY
   etherscan: {
-    apiKey: {
-      sepolia: vars.get("ETHERSCAN_API_KEY", ""),
-    },
+    apiKey: vars.get("ETHERSCAN_API_KEY", ""),
   },
   gasReporter: {
     currency: "USD",
