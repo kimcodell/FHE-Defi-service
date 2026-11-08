@@ -198,6 +198,12 @@ footer {
   gap: 8px;
 }
 
+.head-actions {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
 .hero {
   gap: 16px;
   padding: 28px;

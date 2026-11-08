@@ -1,9 +1,9 @@
-import { useState } from "react";
 import { sepolia } from "wagmi/chains";
 import { useConnect, useConnection, useConnectors, useSwitchChain } from "wagmi";
 
 import { ActionsCard } from "./components/ActionsCard";
-import { ActivityCard, type Activity } from "./components/ActivityCard";
+import { ActivityCard } from "./components/ActivityCard";
+import { useActivityLog } from "./hooks/useActivityLog";
 import { Header } from "./components/Header";
 import { PositionCard } from "./components/PositionCard";
 import { getAddresses } from "./contracts";
@@ -11,10 +11,10 @@ import { usePosition } from "./hooks/usePosition";
 import { hasBrowserWallet } from "./lib/wallet";
 
 export default function App() {
-  const { isConnected, chainId } = useConnection();
+  const { isConnected, chainId, address } = useConnection();
   const addresses = getAddresses(chainId);
   const position = usePosition(addresses);
-  const [activities, setActivities] = useState<Activity[]>([]);
+  const activityLog = useActivityLog(chainId, address);
 
   return (
     <div className="page">
@@ -33,12 +33,9 @@ export default function App() {
           <>
             <div className="grid">
               <PositionCard position={position} />
-              <ActionsCard
-                position={position}
-                onActivity={(a) => setActivities((list) => [a, ...list].slice(0, 20))}
-              />
+              <ActionsCard position={position} onActivity={activityLog.add} />
             </div>
-            <ActivityCard activities={activities} />
+            <ActivityCard activities={activityLog.activities} onClear={activityLog.clear} />
           </>
         )}
       </main>

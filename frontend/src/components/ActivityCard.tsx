@@ -15,12 +15,24 @@ export type Activity = {
 };
 
 /** 이번 세션의 거래 기록: "내가 보낸 금액" vs "블록체인에 기록된 값" */
-export function ActivityCard({ activities }: { activities: Activity[] }) {
+export function ActivityCard({ activities, onClear }: { activities: Activity[]; onClear: () => void }) {
   return (
     <section className="card">
       <div className="card-head">
         <h2>거래 기록</h2>
-        <span className="muted small">이 브라우저에서 보낸 것만 표시</span>
+        <div className="head-actions">
+          <span className="muted small">이 브라우저에 저장 · 지갑별</span>
+          {activities.length > 0 && (
+            <button
+              className="link small"
+              onClick={() => {
+                if (window.confirm("이 브라우저에 저장된 거래 기록을 지울까요? (블록체인 기록은 그대로예요)")) onClear();
+              }}
+            >
+              기록 지우기
+            </button>
+          )}
+        </div>
       </div>
       {activities.length === 0 ? (
         <p className="muted">아직 거래가 없어요. 담보를 맡기는 것부터 시작해 보세요.</p>
@@ -39,7 +51,9 @@ export function ActivityCard({ activities }: { activities: Activity[] }) {
             <tbody>
               {activities.map((a) => (
                 <tr key={a.id}>
-                  <td className="muted">{a.at.toLocaleTimeString("ko-KR")}</td>
+                  <td className="muted">
+                    {a.at.toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                  </td>
                   <td>{a.label}</td>
                   <td>{a.amountText ?? "—"}</td>
                   <td className="mono">{a.handle ? `🔒 ${shortHex(a.handle, 8, 6)}` : "—"}</td>
