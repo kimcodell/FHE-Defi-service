@@ -7,7 +7,8 @@ import { waitForTransactionReceipt } from "wagmi/actions";
 
 import { poolAbi, tokenAbi } from "../contracts";
 import type { Position } from "../hooks/usePosition";
-import { formatAmount, parseAmount } from "../lib/units";
+import { txUrl } from "../lib/explorer";
+import { formatAmount, parseAmount, shortHex } from "../lib/units";
 import type { Activity } from "./ActivityCard";
 
 type Kind = "deposit" | "borrow" | "repay" | "withdraw";
@@ -37,6 +38,7 @@ export function ActionsCard({ position, onActivity }: { position: Position; onAc
   const [step, setStep] = useState<Step>("idle");
   const [error, setError] = useState<string>();
   const [borrowBefore, setBorrowBefore] = useState<Hex>();
+  const [lastTx, setLastTx] = useState<{ hash: Hex; handle?: Hex }>();
 
   const sdk = useZamaSDK();
   const config = useConfig();
@@ -67,6 +69,7 @@ export function ActionsCard({ position, onActivity }: { position: Position; onAc
       const receipt = await waitForTransactionReceipt(config, { hash });
       if (receipt.status !== "success") throw new Error("트랜잭션이 실패했어요 (reverted)");
       await position.refetch();
+      setLastTx({ hash, handle });
       setStep("done");
       onActivity({ ...record, id: hash, at: new Date(), hash, handle });
     } catch (e) {
@@ -273,6 +276,19 @@ export function ActionsCard({ position, onActivity }: { position: Position; onAc
             <p className="badge good">상환 완료 — 빚이 0이 됐어요</p>
           ) : (
             <p className="badge good">완료됐어요. 포지션이 갱신됐습니다.</p>
+          )}
+          {lastTx && (
+            <div className="explorer-box">
+              <a className="btn ghost small" href={txUrl(lastTx.hash)} target="_blank" rel="noreferrer">
+                Etherscan에서 이 거래 확인 ↗
+              </a>
+              {lastTx.handle && (
+                <p className="muted small">
+                  블록체인에는 금액 대신 이 암호문만 기록됐어요:{" "}
+                  <span className="mono">{shortHex(lastTx.handle, 10, 8)}</span>
+                </p>
+              )}
+            </div>
           )}
         </div>
       )}

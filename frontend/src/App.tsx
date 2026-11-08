@@ -8,6 +8,7 @@ import { Header } from "./components/Header";
 import { PositionCard } from "./components/PositionCard";
 import { getAddresses } from "./contracts";
 import { usePosition } from "./hooks/usePosition";
+import { addressUrl } from "./lib/explorer";
 import { hasBrowserWallet } from "./lib/wallet";
 
 export default function App() {
@@ -36,6 +37,19 @@ export default function App() {
               <ActionsCard position={position} onActivity={activityLog.add} />
             </div>
             <ActivityCard activities={activityLog.activities} onClear={activityLog.clear} />
+            <section className="contracts small">
+              <span className="muted">컨트랙트 (Etherscan):</span>
+              <a href={addressUrl(addresses.PrivateLendingPool)} target="_blank" rel="noreferrer">
+                대출 풀 ↗
+              </a>
+              <a href={addressUrl(addresses.MockETH)} target="_blank" rel="noreferrer">
+                mETH 토큰 ↗
+              </a>
+              <a href={addressUrl(addresses.MockUSDC)} target="_blank" rel="noreferrer">
+                mUSDC 토큰 ↗
+              </a>
+              <span className="muted">— 토큰 페이지에서도 누가 얼마를 가졌는지는 보이지 않아요</span>
+            </section>
           </>
         )}
       </main>

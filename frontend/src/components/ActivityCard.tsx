@@ -1,6 +1,6 @@
 import type { Hex } from "viem";
 
-import { EXPLORER_URL } from "../config";
+import { txUrl } from "../lib/explorer";
 import { shortHex } from "../lib/units";
 
 export type Activity = {
@@ -58,9 +58,14 @@ export function ActivityCard({ activities, onClear }: { activities: Activity[]; 
                   <td>{a.amountText ?? "—"}</td>
                   <td className="mono">{a.handle ? `🔒 ${shortHex(a.handle, 8, 6)}` : "—"}</td>
                   <td>
-                    <a href={`${EXPLORER_URL}/tx/${a.hash}`} target="_blank" rel="noreferrer" className="mono">
-                      {shortHex(a.hash)} ↗
-                    </a>
+                    <div className="tx-cell">
+                      <span className="mono muted" title={a.hash}>
+                        {shortHex(a.hash)}
+                      </span>
+                      <a className="btn ghost small" href={txUrl(a.hash)} target="_blank" rel="noreferrer">
+                        Etherscan ↗
+                      </a>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -70,7 +75,9 @@ export function ActivityCard({ activities, onClear }: { activities: Activity[]; 
       )}
       {activities.length > 0 && (
         <p className="muted small">
-          Etherscan 링크를 열어 보면 금액 자리에 위 암호문 핸들만 있어요. 일반 DeFi와 비교해 보는 데모 포인트입니다.
+          Etherscan에서 거래를 열면 일반 토큰 거래에 있는 "Tokens Transferred"(토큰 전송 금액) 항목이 아예 없어요. Logs 탭에는
+          FheMul·FheLe·FheIfThenElse 같은 <strong>연산 이름</strong>과 암호문 핸들만 보이고 금액은 없어요. 일반 DeFi(Aave 등)
+          거래 화면과 나란히 비교하는 데모 포인트입니다.
         </p>
       )}
     </section>

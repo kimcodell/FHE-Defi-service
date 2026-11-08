@@ -1,5 +1,6 @@
 import { useConnect, useConnection, useConnectors, useDisconnect } from "wagmi";
 
+import { addressUrl } from "../lib/explorer";
 import { shortHex } from "../lib/units";
 import { hasBrowserWallet } from "../lib/wallet";
 
@@ -25,9 +26,15 @@ export function Header() {
 
       {isConnected && address ? (
         <div className="wallet">
-          <span className="pill mono" title={address}>
-            {shortHex(address)}
-          </span>
+          <a
+            className="pill mono"
+            href={addressUrl(address)}
+            target="_blank"
+            rel="noreferrer"
+            title={`${address} — Etherscan에서 내 거래 전체 보기`}
+          >
+            {shortHex(address)} ↗
+          </a>
           <button className="btn ghost" onClick={() => disconnect.mutate()}>
             연결 해제
           </button>
