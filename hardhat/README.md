@@ -120,13 +120,68 @@ fhEVM은 트랜잭션마다 총 20M HCU, 순차 깊이 5M HCU 한도가 있다.
   가져갈 수 있다. 대출 풀이 이 방식을 쓴다 (`pool:authorize`).
 - 잔고 암호문은 **본인만 복호화**할 수 있다. 다른 주소의 복호화 요청은 ACL에서 거부된다 (테스트로 확인).
 
-## Sepolia 배포 (3주차)
+## Sepolia 배포
 
 ```bash
-npx hardhat vars set MNEMONIC          # 개발 전용 지갑의 시드 문구
-npx hardhat vars set INFURA_API_KEY
+npx hardhat vars set SEPOLIA_PRIVATE_KEY      # 실행 후 "Enter value:"에 키를 붙여 넣는다 (명령줄에 키를 쓰지 않기)
 npx hardhat deploy --network sepolia
+npx hardhat frontend:export --network sepolia  # 웹 화면에 주소·ABI 복사
 ```
+
+RPC는 기본으로 무료 공개 노드를 쓴다 (`INFURA_API_KEY` 또는 `SEPOLIA_RPC_URL`로 바꿀 수 있음).
+
+### Etherscan 소스 검증
+
+검증하면 Etherscan 거래 화면에 `borrow(bytes32 encryptedAmount, bytes inputProof)`처럼 함수와 입력값이 풀어서 보인다.
+
+```bash
+npx hardhat vars set ETHERSCAN_API_KEY            # etherscan.io 키 하나로 Sepolia까지 (API V2)
+npx hardhat clean && npx hardhat compile --network sepolia   # ⚠️ 반드시 Sepolia용으로 다시 컴파일
+npx hardhat verify --network sepolia --contract contracts/tokens/MockETH.sol:MockETH <mETH 주소> <owner 주소>
+npx hardhat verify --network sepolia --contract contracts/tokens/MockUSDC.sol:MockUSDC <mUSDC 주소> <owner 주소>
+npx hardhat verify --network sepolia --contract contracts/PrivateLendingPool.sol:PrivateLendingPool <풀 주소> <mETH 주소> <mUSDC 주소>
+npx hardhat clean && npx hardhat compile          # 끝나면 로컬용으로 되돌리기 (안 하면 로컬 테스트가 깨질 수 있음)
+```
+
+**주의**: Zama Hardhat 플러그인은 컴파일할 때 **대상 네트워크에 따라 FHE 인프라 주소 설정을 바꿔 넣는다.** 로컬용으로
+컴파일된 상태에서 검증하면 생성 바이트코드의 주소 20바이트가 달라서 `bytecode does NOT match`로 실패한다. (이 주소는
+로컬 체인에서만 실행되는 생성자 분기라 Sepolia 동작에는 영향이 없고, 런타임 코드는 같다.)
+
+### 현재 배포 (2026-11-08, 배포자 `0xb02596cB4da7284493500899266e9715d3c88F94`)
+
+| 컨트랙트           | 주소                                                                                                                            |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| MockETH (mETH)     | [`0xdccC0D5CD41F9bac0fBaD9c2e82d23d5C8Cd0883`](https://sepolia.etherscan.io/address/0xdccC0D5CD41F9bac0fBaD9c2e82d23d5C8Cd0883) |
+| MockUSDC (mUSDC)   | [`0xAeBe6483077e0531a9353CF40907F25b81AA698F`](https://sepolia.etherscan.io/address/0xAeBe6483077e0531a9353CF40907F25b81AA698F) |
+| PrivateLendingPool | [`0xaCC16981e75BD26e6725F066eC5a2C42b35E8807`](https://sepolia.etherscan.io/address/0xaCC16981e75BD26e6725F066eC5a2C42b35E8807) |
+
+배포 비용은 약 0.039 테스트 ETH (풀 유동성 1,000만 mUSDC 발행 포함).
+
+### Sepolia 실제 FHE 검증 결과 (CLI 태스크)
+
+실제 Zama 릴레이어·KMS를 거쳐 암호화 입력과 본인 복호화가 동작함을 확인했다.
+
+| 단계                                             | 결과                                            |
+| ------------------------------------------------ | ----------------------------------------------- |
+| 암호화 발행 (10 mETH, 1,000 mUSDC) → 잔고 복호화 | 10.0 mETH, 1000.0 mUSDC                         |
+| 5 mETH 예치 → 10,000 mUSDC 대출                  | 승인                                            |
+| 1,000 mUSDC 추가 대출 (한도 초과)                | 거절, 0 지급                                    |
+| 포지션 복호화                                    | 빚 10,000.0019 (몇 분치 이자), 남은 한도 499.99 |
+
+| 트랜잭션      |   gasUsed |     수수료 |
+| ------------- | --------: | ---------: |
+| deposit       | 1,560,028 | 0.0016 ETH |
+| borrow (승인) | 1,692,649 | 0.0017 ETH |
+| borrow (거절) | 1,692,613 | 0.0017 ETH |
+
+모든 FHE 트랜잭션이 트랜잭션당 가스 상한(약 16.7M)의 10% 수준이다.
+
+**승인/거절 구분 불가 (실제 네트워크에서 확인)**: 두 번째 이후 대출에서 승인 트랜잭션과 거절 트랜잭션의 이벤트 순서
+(컨트랙트 + 이벤트 종류)가 완전히 같았다. 가스 차이 36은 실행 비용이 아니라 입력 암호문의 무작위 바이트 차이 (0인 바이트
+3개 × 12 gas)에서 온다. 첫 대출만 초기화 연산 때문에 이벤트가 2개 더 많다 (알려진 한계).
+
+참고: 컨트랙트 **배포** 가스는 Sepolia에서 로컬보다 훨씬 컸다 (토큰 1개 13.7M vs 로컬 2.0M). 로컬 Hardhat과 Sepolia의
+가스 규칙 차이로 보이며, 배포는 한 번뿐이라 문제되지 않는다.
 
 ## 라이선스
 
