@@ -337,7 +337,16 @@ a.pill:hover {
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
   gap: 20px;
-  align-items: start;
+  align-items: stretch;
+}
+
+/* 나란히 놓인 카드는 높이를 맞추고, 남는 공간이 생기면 제출 버튼을 카드 아래쪽에 붙인다 */
+.grid > .card .form {
+  flex: 1;
+}
+
+.grid > .card .form > .btn.wide {
+  margin-top: auto;
 }
 
 @media (max-width: 880px) {
