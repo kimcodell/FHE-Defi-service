@@ -137,12 +137,15 @@ export function ActionsCard({ position, onActivity }: { position: Position; onAc
     setInput("");
   }
 
-  // 빠른 입력: 빌리기는 남은 한도의 99.9%(전송까지 붙는 이자 여유), 갚기는 빚 + 0.01 (지갑 잔고 한도)
+  // 빠른 입력: 빌리기는 남은 한도의 99.9%(전송까지 붙는 이자 여유), 갚기는 빚 + 여유분 (지갑 잔고 한도)
   const quickFill = (() => {
     if (kind === "borrow" && values.available !== undefined && values.available > 0n)
       return { label: "최대", value: (values.available * 999n) / 1000n };
     if (kind === "repay" && values.debt !== undefined && values.debt > 0n && values.musdcBalance !== undefined) {
-      const target = values.debt + 10_000n;
+      // 조회한 뒤 블록에 담길 때까지도 이자가 붙는다. 이자는 빚에 비례하므로 여유분도 빚에 비례하게 잡는다:
+      // max(0.01 mUSDC, 빚의 0.01%). 0.01%는 연 10% 이자로 약 8시간 45분치. 더 보낸 몫은 컨트랙트가 가져가지 않는다.
+      const buffer = values.debt / 10_000n > 10_000n ? values.debt / 10_000n : 10_000n;
+      const target = values.debt + buffer;
       return { label: "전액", value: target < values.musdcBalance ? target : values.musdcBalance };
     }
     if (kind === "deposit" && values.methBalance !== undefined && values.methBalance > 0n)
