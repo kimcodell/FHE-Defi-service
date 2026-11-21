@@ -433,6 +433,99 @@ footer {
   background: var(--accent-soft);
 }
 
+/* Health / liquidation ------------------------------------------------ */
+
+.health {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.health-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.health-track {
+  position: relative;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: visible;
+}
+
+.health-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+
+.health-fill.health-safe,
+.health-fill.health-none {
+  background: var(--good);
+}
+
+.health-fill.health-caution {
+  background: var(--warn);
+}
+
+.health-fill.health-danger {
+  background: var(--bad);
+}
+
+.health-mark {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 16px;
+  background: var(--muted);
+  transform: translateX(-1px);
+}
+
+.health-mark.danger {
+  background: var(--bad);
+}
+
+.health-legend {
+  position: relative;
+  height: 1.2em;
+}
+
+.health-legend span {
+  position: absolute;
+  white-space: nowrap;
+}
+
+.health-legend span:not(:first-child) {
+  transform: translateX(-50%);
+}
+
+.badge.health-safe,
+.badge.health-none {
+  background: var(--good-soft);
+  color: var(--good);
+}
+
+.badge.health-caution {
+  background: rgba(154, 98, 0, 0.12);
+  color: var(--warn);
+}
+
+.badge.health-danger {
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+
+.liquidated {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--bad-soft);
+  border: 1px solid var(--bad);
+  line-height: 1.6;
+}
+
 .nudge {
   display: flex;
   flex-direction: column;

@@ -304,7 +304,9 @@ function TabHelp({ kind, position }: { kind: Kind; position: Position }) {
     case "deposit":
       return (
         <p className="help">
-          맡긴 mETH 1개당 2,100 mUSDC까지 빌릴 수 있어요. 지갑: <strong>{show(v.methBalance, "mETH")}</strong>
+          맡긴 mETH 1개당{" "}
+          {position.price !== undefined ? ((Number(position.price) * 7) / 10).toLocaleString("ko-KR") : "—"} mUSDC까지
+          빌릴 수 있어요 (현재 가격의 70%). 지갑: <strong>{show(v.methBalance, "mETH")}</strong>
         </p>
       );
     case "borrow":

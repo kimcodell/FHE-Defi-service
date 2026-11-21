@@ -5,6 +5,7 @@ import { ActionsCard } from "./components/ActionsCard";
 import { ActivityCard } from "./components/ActivityCard";
 import { useActivityLog } from "./hooks/useActivityLog";
 import { Header } from "./components/Header";
+import { LiquidationCheckCard } from "./components/LiquidationCheckCard";
 import { PositionCard } from "./components/PositionCard";
 import { getAddresses } from "./contracts";
 import { usePosition } from "./hooks/usePosition";
@@ -36,6 +37,7 @@ export default function App() {
               <PositionCard position={position} />
               <ActionsCard position={position} onActivity={activityLog.add} />
             </div>
+            <LiquidationCheckCard position={position} onActivity={activityLog.add} />
             <ActivityCard activities={activityLog.activities} onClear={activityLog.clear} />
             <section className="contracts small">
               <span className="muted">컨트랙트 (Etherscan):</span>
@@ -48,13 +50,19 @@ export default function App() {
               <a href={addressUrl(addresses.MockUSDC)} target="_blank" rel="noreferrer">
                 mUSDC 토큰 ↗
               </a>
+              {addresses.MockPriceOracle && (
+                <a href={addressUrl(addresses.MockPriceOracle)} target="_blank" rel="noreferrer">
+                  가격 오라클 ↗
+                </a>
+              )}
               <span className="muted">— 토큰 페이지에서도 누가 얼마를 가졌는지는 보이지 않아요</span>
             </section>
           </>
         )}
       </main>
       <footer className="muted small">
-        수업 프로젝트 데모 · 테스트넷 전용 · 환율 1 mETH = 3,000 mUSDC · 담보비율 70% · 연 10% 고정 이자
+        수업 프로젝트 데모 · 테스트넷 전용 · 대출 한도 70% · 청산 기준 80% (빚 절반 상계, 벌금 5%) · 연 10% 고정 이자 ·
+        가격은 데모용 모의 오라클
       </footer>
     </div>
   );
