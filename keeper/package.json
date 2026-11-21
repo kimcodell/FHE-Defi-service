@@ -1,0 +1,18 @@
+{
+  "name": "fhe-lending-keeper",
+  "version": "0.1.0",
+  "private": true,
+  "description": "PrivateLendingPool 청산 점검 봇: 주기적으로 poke(1)을 호출한다. 결과(청산 여부)는 알 수 없다.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "start": "node src/keeper.ts",
+    "once": "node src/keeper.ts --once",
+    "dry-run": "node src/keeper.ts --once --dry-run"
+  },
+  "dependencies": {
+    "viem": "2.57.16"
+  }
+}
