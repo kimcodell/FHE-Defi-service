@@ -67,7 +67,8 @@ npx hardhat pool:position    --network localhost --signer 1      # → 빚 5,000
 ```
 
 `pool:poke` 출력에는 **누구를 점검했는지만** 나오고 결과는 나오지 않는다. 결과는 각 포지션 주인만 `pool:position`으로
-확인할 수 있다. 실제 네트워크에서는 청산 점검 봇([`../keeper/`](../keeper/README.md))이 `poke(1)`을 주기적으로 호출한다.
+확인할 수 있다. 실제 네트워크에서는 청산 점검 봇([`../keeper/`](../keeper/README.md))이 가격이 2% 떨어지거나 하루가
+지나면 모든 포지션을 `poke`로 한 바퀴 점검한다.
 
 가격은 1~16,777,215(2^24 − 1) 사이 정수만 된다. 대출 풀이 이 범위 밖의 가격을 거부해서(128비트 암호문 곱셈이 넘치지
 않게), 오라클에 그런 값이 들어가면 풀의 모든 함수가 실패하기 때문이다. 그래서 오라클 컨트랙트(`ZeroPrice`,
@@ -107,8 +108,8 @@ test/lendingPool.ts            # 대출 풀·청산 테스트 (38)
 | `accrue`             | 공개 이자 지수 갱신 (연 10%). 위 함수들이 자동 호출                | -                          |
 
 사용자 함수(예치·대출·상환·반환)는 다른 포지션을 점검하지 않는다. 점검은 `poke`로만 진행하고, 청산 점검 봇
-([`../keeper/`](../keeper/README.md))이 주기적으로 호출한다. 사용자가 적어 거래가 뜸해도 점검이 멈추지 않게 하기
-위해서다.
+([`../keeper/`](../keeper/README.md))이 가격 하락(2%)·하루 주기로 호출한다. 사용자가 적어 거래가 뜸해도 점검이 멈추지
+않게 하기 위해서다.
 
 - **조회는 본인만**: `collateralOf`, `scaledDebtOf`, `lastBorrowedOf`, `liquidatedDebtOf`, `seizedCollateralOf`는 암호문
   핸들을 돌려주고 본인만 복호화할 수 있다. 현재 부채 = `scaledDebt × previewBorrowIndex() / 2^40` (프론트에서 계산).

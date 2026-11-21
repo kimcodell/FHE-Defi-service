@@ -14,7 +14,7 @@ const POKE_COUNT = 3n;
 
 /**
  * 청산 점검(poke): 누구나 다음 순번 포지션들을 블라인드 점검할 수 있다. 보상은 없다.
- * 평소에는 청산 점검 봇(keeper/)이 주기적으로 점검하므로 필요 없고, 데모(가격 변경 직후)처럼 바로 점검하고 싶을 때 쓴다.
+ * 평소에는 청산 점검 봇(keeper/)이 가격 하락(2%)과 하루 주기로 점검하므로 필요 없고, 데모(가격 변경 직후)처럼 바로 점검하고 싶을 때 쓴다.
  */
 export function LiquidationCheckCard({
   position,
@@ -66,7 +66,7 @@ export function LiquidationCheckCard({
         <span className="muted small">누구나 실행 · 보상 없음</span>
       </div>
       <p className="help">
-        평소에는 청산 점검 봇이 주기적으로 다음 순번 포지션을 점검해요. 가격이 막 바뀌어서 바로 점검하고 싶을 때는 이
+        평소에는 청산 점검 봇이 가격이 2% 떨어지거나 하루가 지나면 모든 포지션을 점검해요. 가격이 막 바뀌어서 바로 점검하고 싶을 때는 이
         버튼으로 직접 진행할 수 있어요. 누가 눌러도 <strong>결과는 각 포지션 주인만</strong> 볼 수 있어요.
       </p>
       <div className="row">
