@@ -187,13 +187,9 @@ footer {
 }
 
 .brand-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 12px;
-  background: var(--grad);
-  color: #fff;
-  box-shadow: 0 6px 16px rgba(139, 92, 246, 0.35);
+  display: block;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 10px rgba(91, 76, 230, 0.25));
 }
 
 .brand-sub {

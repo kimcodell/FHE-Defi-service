@@ -1,3 +1,5 @@
+import logoUrl from "../assets/logo.png";
+
 /** 작은 선 아이콘 (이모지 대신). currentColor를 따른다. */
 const PATHS = {
   lock: "M7 11V8a5 5 0 0 1 10 0v3M6 11h12a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1Zm6 4v2",
@@ -36,11 +38,7 @@ export function TokenDot({ symbol }: { symbol: "mETH" | "mUSDC" }) {
   return <span className={`token-dot ${symbol === "mETH" ? "eth" : "usdc"}`}>{symbol === "mETH" ? "Ξ" : "$"}</span>;
 }
 
-/** 브랜드 마크: 보라→분홍 그라데이션 위의 자물쇠 */
-export function BrandMark({ size = 36 }: { size?: number }) {
-  return (
-    <span className="brand-mark" style={{ width: size, height: size }} aria-hidden="true">
-      <Icon name="lock" size={size * 0.55} />
-    </span>
-  );
+/** 브랜드 로고 (src/assets/logo.png, 원본은 logo-source.png) */
+export function BrandMark({ size = 40 }: { size?: number }) {
+  return <img className="brand-mark" src={logoUrl} width={size} height={size} alt="" aria-hidden="true" />;
 }
