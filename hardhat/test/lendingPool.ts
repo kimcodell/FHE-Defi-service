@@ -5,7 +5,7 @@ import { expect } from "chai";
 import type { ContractTransactionResponse } from "ethers";
 import { ethers, fhevm } from "hardhat";
 
-import { MockETH, MockUSDC, PrivateLendingPool } from "../types";
+import { MockETH, MockPriceOracle, MockUSDC, PrivateLendingPool } from "../types";
 
 /** 6 decimals 기본 단위 (예: 10 mETH -> 10_000_000) */
 const units = (n: string | number) => ethers.parseUnits(String(n), 6);
@@ -17,8 +17,11 @@ describe("PrivateLendingPool", function () {
   let owner: HardhatEthersSigner;
   let alice: HardhatEthersSigner;
   let bob: HardhatEthersSigner;
+  let carol: HardhatEthersSigner;
+  let dave: HardhatEthersSigner;
   let meth: MockETH;
   let musdc: MockUSDC;
+  let oracle: MockPriceOracle;
   let pool: PrivateLendingPool;
   let methAddr: string;
   let musdcAddr: string;
@@ -68,6 +71,27 @@ describe("PrivateLendingPool", function () {
     return (await pool.connect(user).withdrawCollateral()).wait();
   }
 
+  const liquidatedDebt = async (user: HardhatEthersSigner) =>
+    decrypt64(await pool.liquidatedDebtOf(user.address), poolAddr, user);
+  const seizedCollateral = async (user: HardhatEthersSigner) =>
+    decrypt64(await pool.seizedCollateralOf(user.address), poolAddr, user);
+
+  async function setPrice(price: number) {
+    await (await oracle.connect(owner).setPrice(price)).wait();
+  }
+  async function poke(caller: HardhatEthersSigner, count: number) {
+    return (await pool.connect(caller).poke(count)).wait();
+  }
+
+  /** 10 mETH + 1,000 mUSDC 지급, 풀을 operator로 등록 */
+  async function fund(user: HardhatEthersSigner) {
+    const until = (await time.latest()) + ONE_YEAR * 10;
+    await (await meth.mint(user.address, units(10))).wait();
+    await (await musdc.mint(user.address, units(1000))).wait();
+    await (await meth.connect(user).setOperator(poolAddr, until)).wait();
+    await (await musdc.connect(user).setOperator(poolAddr, until)).wait();
+  }
+
   /** 트랜잭션이 남긴 이벤트 종류 목록 (금액이 아닌 "어떤 이벤트가 났는지"만) */
   function eventSignatures(receipt: Awaited<ReturnType<ContractTransactionResponse["wait"]>>): string[] {
     return receipt!.logs.map((log) => `${log.address}:${log.topics[0]}`);
@@ -78,7 +102,7 @@ describe("PrivateLendingPool", function () {
   // ------------------------------------------------------------------
 
   before(async function () {
-    [owner, alice, bob] = await ethers.getSigners();
+    [owner, alice, bob, carol, dave] = await ethers.getSigners();
   });
 
   beforeEach(async function () {
@@ -90,26 +114,27 @@ describe("PrivateLendingPool", function () {
     musdc = (await (await ethers.getContractFactory("MockUSDC")).deploy(owner.address)) as MockUSDC;
     methAddr = await meth.getAddress();
     musdcAddr = await musdc.getAddress();
+    oracle = (await (
+      await ethers.getContractFactory("MockPriceOracle")
+    ).deploy(owner.address, 3000)) as MockPriceOracle;
     pool = (await (
       await ethers.getContractFactory("PrivateLendingPool")
-    ).deploy(methAddr, musdcAddr)) as PrivateLendingPool;
+    ).deploy(methAddr, musdcAddr, await oracle.getAddress())) as PrivateLendingPool;
     poolAddr = await pool.getAddress();
 
     await (await musdc.mint(poolAddr, units(10_000_000))).wait();
-    const until = (await time.latest()) + ONE_YEAR * 10;
-    for (const user of [alice, bob]) {
-      await (await meth.mint(user.address, units(10))).wait();
-      await (await musdc.mint(user.address, units(1000))).wait();
-      await (await meth.connect(user).setOperator(poolAddr, until)).wait();
-      await (await musdc.connect(user).setOperator(poolAddr, until)).wait();
-    }
+    for (const user of [alice, bob]) await fund(user);
   });
 
-  it("uses the planned fixed parameters", async function () {
-    expect(await pool.PRICE()).to.eq(3000);
-    expect(await pool.LTV_BPS()).to.eq(7000);
-    expect(await pool.APR_BPS()).to.eq(1000);
-    expect(await pool.MAX_BORROW_PER_COLLATERAL()).to.eq(2100);
+  it("uses the planned parameters", async function () {
+    expect(await pool.currentPrice()).to.eq(3000);
+    const p = await pool.parameters();
+    expect(p.ltvPct).to.eq(70);
+    expect(p.liquidationThresholdPct).to.eq(80);
+    expect(p.closeFactorPct).to.eq(50);
+    expect(p.liquidationPenaltyPct).to.eq(5);
+    expect(p.aprBps).to.eq(1000);
+    expect(p.maxChecksPerPoke).to.eq(3);
   });
 
   // ------------------------------------------------------------------
@@ -333,17 +358,228 @@ describe("PrivateLendingPool", function () {
   });
 
   // ------------------------------------------------------------------
+  describe("⑧ blind liquidation", function () {
+    beforeEach(async function () {
+      await deposit(alice, units(5)); // alice가 순번 1번
+      await borrow(alice, units(10_000)); // 빚 10,000 / 담보 가치 15,000 = 67%
+      await deposit(bob, units(5)); // bob: 빚 없음 (항상 안전)
+    });
+
+    it("follows the oracle price for the borrow limit", async function () {
+      await setPrice(2000); // bob 한도 = 5 × 2,000 × 70% = 7,000
+      await borrow(bob, units(7001));
+      expect(await lastBorrowed(bob)).to.eq(0n);
+      await borrow(bob, units(7000));
+      expect(await lastBorrowed(bob)).to.eq(units(7000));
+    });
+
+    it("leaves a healthy position untouched", async function () {
+      await poke(carol, 3);
+      expect(await currentDebt(alice)).to.be.closeTo(units(10_000), TOLERANCE);
+      expect(await collateral(alice)).to.eq(units(5));
+      expect(await liquidatedDebt(alice)).to.eq(0n);
+      expect(await seizedCollateral(alice)).to.eq(0n);
+    });
+
+    it("repays half the debt from collateral (+5% penalty) once debt exceeds 80% of collateral value", async function () {
+      await setPrice(2400); // 담보 가치 12,000 × 80% = 9,600 < 빚 10,000 → 위험
+      await poke(carol, 3);
+
+      const repaid = await liquidatedDebt(alice);
+      expect(repaid).to.be.closeTo(units(5000), TOLERANCE);
+      // 5,000 × 1.05 ÷ 2,400 = 2.1875 mETH
+      expect(await seizedCollateral(alice)).to.be.closeTo(units("2.1875"), units("0.0001"));
+      expect(await collateral(alice)).to.be.closeTo(units("2.8125"), units("0.0001"));
+      expect(await currentDebt(alice)).to.be.closeTo(units(5000), TOLERANCE);
+
+      // 남은 포지션: 빚 5,000 < 2.8125 × 2,400 × 80% = 5,400 → 다시 안전. 다시 점검해도 그대로
+      await poke(carol, 3);
+      expect(await liquidatedDebt(alice)).to.eq(repaid);
+    });
+
+    it("seizes all collateral and leaves the rest as bad debt when deeply underwater", async function () {
+      await setPrice(1000); // 빚 절반 5,000 × 1.05 = 5,250어치가 필요하지만 담보는 5,000어치뿐
+      await poke(carol, 3);
+      expect(await collateral(alice)).to.eq(0n);
+      expect(await seizedCollateral(alice)).to.eq(units(5));
+      // 5 mETH × 1,000 ÷ 1.05 = 4,761.90 만큼만 상계, 나머지는 부실 채권
+      expect(await liquidatedDebt(alice)).to.be.closeTo(units("4761.904761"), TOLERANCE);
+      expect(await currentDebt(alice)).to.be.closeTo(units("5238.095239"), TOLERANCE);
+    });
+
+    it("ordinary transactions do not check other positions; only poke does", async function () {
+      await setPrice(2400);
+      const before = await pool.nextCheckIndex();
+      const receipt = await deposit(bob, units(1)); // 평범한 예치는 점검을 하지 않는다
+      const checkedTopic = pool.interface.getEvent("PositionChecked").topicHash;
+      expect(receipt!.logs.filter((l) => l.topics[0] === checkedTopic)).to.have.length(0);
+      expect(await pool.nextCheckIndex()).to.eq(before);
+      expect(await liquidatedDebt(alice)).to.eq(0n);
+
+      await poke(carol, 1); // 봇(포지션 없는 지갑)이 다음 순번(alice)을 점검
+      expect(await liquidatedDebt(alice)).to.be.closeTo(units(5000), TOLERANCE);
+    });
+
+    it("anyone can poke, including the position owner", async function () {
+      await setPrice(2400);
+      await poke(alice, 1); // 순번 0번 = alice 자신
+      expect(await liquidatedDebt(alice)).to.be.closeTo(units(5000), TOLERANCE);
+    });
+
+    it("checks each position at most once per poke and keeps the cursor moving", async function () {
+      const checkedTopic = pool.interface.getEvent("PositionChecked").topicHash;
+      const receipt = await poke(carol, 3); // 포지션은 2개뿐 → 2건만
+      expect(receipt!.logs.filter((l) => l.topics[0] === checkedTopic)).to.have.length(2);
+      expect(await pool.nextCheckIndex()).to.eq(2);
+      await poke(carol, 1);
+      expect(await pool.nextCheckIndex()).to.eq(3); // 다음 바퀴: 순번 0번(alice)
+    });
+
+    it("a liquidating check and a non-liquidating check look identical on-chain (events and gas)", async function () {
+      // 똑같은 배포와 거래 순서를 독립적으로 두 번 만들고, 가격만 다르게 해서 비밀인 결과만 다른 두 점검을 비교한다.
+      //   A: 가격 3,000 → alice 안전 (청산 안 됨) / B: 가격 2,400 → alice 위험 (청산됨)
+      // 가스는 호출 순서(저장 슬롯을 처음 쓰는지 등)에도 영향을 받으므로, 순서까지 같은 조건에서 비교해야 공정하다.
+      // (로컬 mock은 스냅샷 복원과 함께 쓰면 복호화 기록이 꼬여서, 스냅샷 대신 새로 배포한다)
+      async function run(price: number) {
+        const m = (await (await ethers.getContractFactory("MockETH")).deploy(owner.address)) as MockETH;
+        const u = (await (await ethers.getContractFactory("MockUSDC")).deploy(owner.address)) as MockUSDC;
+        const o = (await (
+          await ethers.getContractFactory("MockPriceOracle")
+        ).deploy(owner.address, 3000)) as MockPriceOracle;
+        const p = (await (
+          await ethers.getContractFactory("PrivateLendingPool")
+        ).deploy(await m.getAddress(), await u.getAddress(), await o.getAddress())) as PrivateLendingPool;
+        const pAddr = await p.getAddress();
+
+        await (await u.mint(pAddr, units(10_000_000))).wait();
+        const until = (await time.latest()) + ONE_YEAR * 10;
+        for (const user of [alice, bob]) {
+          await (await m.mint(user.address, units(10))).wait();
+          await (await m.connect(user).setOperator(pAddr, until)).wait();
+        }
+        const enc = (user: HardhatEthersSigner, v: bigint) =>
+          fhevm.createEncryptedInput(pAddr, user.address).add64(v).encrypt();
+        let e = await enc(alice, units(5));
+        await (await p.connect(alice).deposit(e.handles[0], e.inputProof)).wait();
+        e = await enc(alice, units(10_000));
+        await (await p.connect(alice).borrow(e.handles[0], e.inputProof)).wait();
+        e = await enc(bob, units(5));
+        await (await p.connect(bob).deposit(e.handles[0], e.inputProof)).wait();
+        while ((await p.positionAt((await p.nextCheckIndex()) % 2n)) !== alice.address) {
+          await (await p.connect(carol).poke(1)).wait();
+        }
+
+        await (await o.setPrice(price)).wait();
+        const receipt = await (await p.connect(carol).poke(1)).wait(); // alice 점검
+
+        const roles = new Map<string, string>([
+          [pAddr, "pool"],
+          [await m.getAddress(), "mETH"],
+          [await u.getAddress(), "mUSDC"],
+        ]);
+        return {
+          gas: receipt!.gasUsed,
+          events: receipt!.logs.map((l) => `${roles.get(l.address) ?? l.address}:${l.topics[0]}`),
+          liquidated: await decrypt64(await p.liquidatedDebtOf(alice.address), pAddr, alice),
+        };
+      }
+
+      const safe = await run(3000);
+      const liquidating = await run(2400);
+      expect(safe.liquidated).to.eq(0n);
+      expect(liquidating.liquidated).to.be.greaterThan(0n); // 실제로 청산됨
+      expect(liquidating.events).to.deep.eq(safe.events);
+      expect(liquidating.gas).to.eq(safe.gas);
+    });
+
+    it("lets a liquidated user repay the rest and withdraw the remaining collateral", async function () {
+      await setPrice(2400);
+      await poke(carol, 3);
+      await repay(alice, units(6000)); // 남은 빚 ~5,000만 가져감
+      expect(await currentDebt(alice)).to.eq(0n);
+      await withdraw(alice);
+      expect(await balance(meth, alice)).to.be.closeTo(units("7.8125"), units("0.0001")); // 지갑 5 + 남은 담보 2.8125
+    });
+
+    for (const [label, getHandle] of [
+      ["liquidated debt", () => pool.liquidatedDebtOf(alice.address)],
+      ["seized collateral", () => pool.seizedCollateralOf(alice.address)],
+    ] as const) {
+      it(`another user cannot decrypt someone's ${label}`, async function () {
+        await setPrice(2400);
+        await poke(carol, 3);
+        let error = "";
+        try {
+          await fhevm.userDecryptEuint(FhevmType.euint64, await getHandle(), poolAddr, bob);
+        } catch (e) {
+          error = String(e);
+        }
+        expect(error).to.match(/not authorized to user decrypt/);
+      });
+    }
+
+    it("lets only the oracle owner change the price, and rejects 0", async function () {
+      await expect(oracle.connect(alice).setPrice(1)).to.be.revertedWithCustomError(
+        oracle,
+        "OwnableUnauthorizedAccount",
+      );
+      await expect(oracle.connect(owner).setPrice(0)).to.be.revertedWithCustomError(oracle, "ZeroPrice");
+    });
+
+    it("rejects oracle prices the pool cannot use (above 2^24 - 1)", async function () {
+      const max = 2n ** 24n - 1n;
+      expect(await oracle.MAX_PRICE()).to.eq(max);
+      await expect(oracle.connect(owner).setPrice(max + 1n))
+        .to.be.revertedWithCustomError(oracle, "PriceTooHigh")
+        .withArgs(max + 1n, max);
+      await expect(
+        (await ethers.getContractFactory("MockPriceOracle")).deploy(owner.address, max + 1n),
+      ).to.be.revertedWithCustomError(oracle, "PriceTooHigh");
+
+      await (await oracle.connect(owner).setPrice(max)).wait(); // 경계값은 허용, 풀도 그대로 동작
+      expect(await pool.currentPrice()).to.eq(max);
+      await poke(carol, 1);
+    });
+
+    it("registers each position once and caps poke at 3 checks", async function () {
+      expect(await pool.positionCount()).to.eq(2);
+      await deposit(alice, units(1));
+      expect(await pool.positionCount()).to.eq(2);
+
+      for (const user of [carol, dave]) {
+        await fund(user);
+        await deposit(user, units(1));
+      }
+      const receipt = await poke(owner, 10);
+      const checkedTopic = pool.interface.getEvent("PositionChecked").topicHash;
+      expect(receipt!.logs.filter((l) => l.topics[0] === checkedTopic)).to.have.length(3);
+    });
+  });
+
+  // ------------------------------------------------------------------
   it("stays within fhEVM per-transaction HCU limits (20M total, 5M depth)", async function () {
+    // 포지션 4개를 만들어 두어 poke(1)·poke(3)이 실제로 점검을 하게 한다
+    for (const user of [carol, dave]) await fund(user);
+    await deposit(bob, units(5));
+    await borrow(bob, units(1000));
+    await deposit(carol, units(5));
+    await deposit(dave, units(5));
+
     const receipts = {
       deposit: await deposit(alice, units(5)),
       borrow: await borrow(alice, units(1000)),
       repay: await repay(alice, units(500)),
       withdrawCollateral: await withdraw(alice),
+      "poke(1)": await poke(owner, 1),
+      "poke(3)": await poke(owner, 3),
     };
-    const rows: Record<string, { totalHCU: number; depthHCU: number }> = {};
+    const checkedTopic = pool.interface.getEvent("PositionChecked").topicHash;
+    const rows: Record<string, { checks: number; totalHCU: number; depthHCU: number; gasUsed: number }> = {};
     for (const [name, receipt] of Object.entries(receipts)) {
       const hcu = fhevm.computeTransactionHCU(receipt!);
-      rows[name] = { totalHCU: hcu.globalHCU, depthHCU: hcu.maxHCUDepth };
+      const checks = receipt!.logs.filter((l) => l.topics[0] === checkedTopic).length;
+      rows[name] = { checks, totalHCU: hcu.globalHCU, depthHCU: hcu.maxHCUDepth, gasUsed: Number(receipt!.gasUsed) };
+      expect(checks).to.eq(name === "poke(3)" ? 3 : name === "poke(1)" ? 1 : 0);
       expect(hcu.globalHCU).to.be.lessThan(20_000_000);
       expect(hcu.maxHCUDepth).to.be.lessThan(5_000_000);
     }

@@ -14,10 +14,11 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
 
   const meth = await get("MockETH");
   const musdc = await get("MockUSDC");
+  const oracle = await get("MockPriceOracle");
 
   const pool = await deploy("PrivateLendingPool", {
     from: deployer,
-    args: [meth.address, musdc.address],
+    args: [meth.address, musdc.address, oracle.address],
     log: true,
   });
   console.log(`PrivateLendingPool : ${pool.address}`);
@@ -31,4 +32,4 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
 export default func;
 func.id = "deploy_pool";
 func.tags = ["pool"];
-func.dependencies = ["tokens"];
+func.dependencies = ["tokens", "oracle"];
