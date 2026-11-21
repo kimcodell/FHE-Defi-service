@@ -1,11 +1,13 @@
 import { useConnect, useConnection, useConnectors, useDisconnect } from "wagmi";
+import { sepolia } from "wagmi/chains";
 
 import { addressUrl } from "../lib/explorer";
 import { shortHex } from "../lib/units";
 import { hasBrowserWallet } from "../lib/wallet";
+import { BrandMark, Icon } from "./Icon";
 
 export function Header() {
-  const { address, isConnected } = useConnection();
+  const { address, isConnected, chainId } = useConnection();
   const connectors = useConnectors();
   const connect = useConnect();
   const disconnect = useDisconnect();
@@ -15,17 +17,16 @@ export function Header() {
   return (
     <header className="header">
       <div className="brand">
-        <span className="brand-mark" aria-hidden="true">
-          🔒
-        </span>
+        <BrandMark />
         <div>
-          <h1>Private Lending</h1>
-          <p className="muted small">금액이 암호화된 담보 대출 · Zama FHE · Sepolia</p>
+          <h1>FHE-DeFi</h1>
+          <p className="brand-sub">금액이 암호화된 담보 대출 · Zama FHE</p>
         </div>
       </div>
 
       {isConnected && address ? (
         <div className="wallet">
+          {chainId === sepolia.id && <span className="pill net">Sepolia</span>}
           <a
             className="pill mono"
             href={addressUrl(address)}
@@ -33,9 +34,10 @@ export function Header() {
             rel="noreferrer"
             title={`${address} — Etherscan에서 내 거래 전체 보기`}
           >
-            {shortHex(address)} ↗
+            <Icon name="wallet" size={14} />
+            {shortHex(address)}
           </a>
-          <button className="btn ghost" onClick={() => disconnect.mutate()}>
+          <button className="btn ghost small" onClick={() => disconnect.mutate()}>
             연결 해제
           </button>
         </div>
@@ -45,6 +47,7 @@ export function Header() {
           disabled={!injected || connect.isPending}
           onClick={() => injected && connect.mutate({ connector: injected })}
         >
+          <Icon name="wallet" />
           {connect.isPending ? "연결 중…" : "지갑 연결"}
         </button>
       )}

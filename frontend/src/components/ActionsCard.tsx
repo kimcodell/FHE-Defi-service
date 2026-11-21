@@ -10,9 +10,18 @@ import type { Position } from "../hooks/usePosition";
 import { txUrl } from "../lib/explorer";
 import { formatAmount, parseAmount, shortHex } from "../lib/units";
 import type { Activity } from "./ActivityCard";
+import { Icon, TokenDot } from "./Icon";
 
 type Kind = "deposit" | "borrow" | "repay" | "withdraw";
 type Step = "idle" | "encrypting" | "signing" | "confirming" | "done" | "error";
+
+/** 입력칸 위에 붙는 동사 */
+const TAB_VERB: Record<Kind, string> = {
+  deposit: "맡길",
+  borrow: "빌릴",
+  repay: "갚을",
+  withdraw: "돌려받을",
+};
 
 const TABS: { kind: Kind; label: string; unit?: "mETH" | "mUSDC" }[] = [
   { kind: "deposit", label: "담보 맡기기", unit: "mETH" },
@@ -61,7 +70,10 @@ export function ActionsCard({ position, onActivity }: { position: Position; onAc
     setError(undefined);
   }
 
-  async function run(action: () => Promise<{ hash: Hex; handle?: Hex }>, record: Omit<Activity, "id" | "at" | "hash" | "handle">) {
+  async function run(
+    action: () => Promise<{ hash: Hex; handle?: Hex }>,
+    record: Omit<Activity, "id" | "at" | "hash" | "handle">,
+  ) {
     setError(undefined);
     try {
       const { hash, handle } = await action();
@@ -102,7 +114,11 @@ export function ActionsCard({ position, onActivity }: { position: Position; onAc
       await run(
         async () => {
           setStep("signing");
-          const hash = await write.mutateAsync({ address: pool, abi: poolAbi, functionName: "withdrawCollateral" });
+          const hash = await write.mutateAsync({
+            address: pool,
+            abi: poolAbi,
+            functionName: "withdrawCollateral",
+          });
           return { hash };
         },
         { label: "담보 돌려받기 요청" },
@@ -132,7 +148,10 @@ export function ActionsCard({ position, onActivity }: { position: Position; onAc
         });
         return { hash, handle };
       },
-      { label: tab.label, amountText: `${formatAmount(parsed.value)} ${tab.unit}` },
+      {
+        label: tab.label,
+        amountText: `${formatAmount(parsed.value)} ${tab.unit}`,
+      },
     );
     setInput("");
   }
@@ -146,7 +165,10 @@ export function ActionsCard({ position, onActivity }: { position: Position; onAc
       // max(0.01 mUSDC, 빚의 0.01%). 0.01%는 연 10% 이자로 약 8시간 45분치. 더 보낸 몫은 컨트랙트가 가져가지 않는다.
       const buffer = values.debt / 10_000n > 10_000n ? values.debt / 10_000n : 10_000n;
       const target = values.debt + buffer;
-      return { label: "전액", value: target < values.musdcBalance ? target : values.musdcBalance };
+      return {
+        label: "전액",
+        value: target < values.musdcBalance ? target : values.musdcBalance,
+      };
     }
     if (kind === "deposit" && values.methBalance !== undefined && values.methBalance > 0n)
       return { label: "전부", value: values.methBalance };
@@ -198,8 +220,8 @@ export function ActionsCard({ position, onActivity }: { position: Position; onAc
       {kind === "repay" && canWithdraw && (
         <div className="nudge">
           <p>
-            <strong>빚을 모두 갚았어요.</strong> 담보 {formatAmount(values.collateral!)} mETH는 아직 대출 풀에 잠겨 있어요.
-            돌려받기는 별도 거래예요.
+            <strong>빚을 모두 갚았어요.</strong> 담보 {formatAmount(values.collateral!)} mETH는 아직 대출 풀에 잠겨
+            있어요. 돌려받기는 별도 거래예요.
           </p>
           <button className="btn primary" disabled={busy} onClick={() => selectTab("withdraw")}>
             담보 돌려받으러 가기 →
@@ -210,8 +232,8 @@ export function ActionsCard({ position, onActivity }: { position: Position; onAc
       {needsOperator ? (
         <div className="setup">
           <p>
-            처음 한 번, 대출 풀이 내 {kind === "deposit" ? "mETH" : "mUSDC"}를 옮길 수 있게 권한을 줘야 해요. (일반 토큰의
-            "approve"에 해당, {OPERATOR_DAYS}일간 유효)
+            처음 한 번, 대출 풀이 내 {kind === "deposit" ? "mETH" : "mUSDC"}를 옮길 수 있게 권한을 줘야 해요. (일반
+            토큰의 "approve"에 해당, {OPERATOR_DAYS}일간 유효)
           </p>
           <button className="btn primary" disabled={busy} onClick={grantOperator}>
             {busy ? STEP_TEXT[step] : "권한 주기"}
@@ -226,31 +248,43 @@ export function ActionsCard({ position, onActivity }: { position: Position; onAc
           }}
         >
           {tab.unit && (
-            <label className="field">
-              <span className="muted small">금액 ({tab.unit})</span>
-              <div className="input-row">
-                <input
-                  inputMode="decimal"
-                  placeholder="0.0"
-                  value={input}
-                  disabled={busy}
-                  onChange={(e) => setInput(e.target.value)}
-                />
-                <span className="unit">{tab.unit}</span>
-                {quickFill && (
-                  <button
-                    type="button"
-                    className="btn ghost small"
+            <div className="field">
+              <label className="swap-box">
+                <span className="swap-top">
+                  <span>{TAB_VERB[kind]} 금액</span>
+                  {quickFill && (
+                    <button
+                      type="button"
+                      className="chip"
+                      disabled={busy}
+                      onClick={() => setInput(formatAmount(quickFill.value).replaceAll(",", ""))}
+                    >
+                      {quickFill.label}
+                    </button>
+                  )}
+                </span>
+                <span className="swap-main">
+                  <input
+                    inputMode="decimal"
+                    placeholder="0"
+                    value={input}
                     disabled={busy}
-                    onClick={() => setInput(formatAmount(quickFill.value).replaceAll(",", ""))}
-                  >
-                    {quickFill.label}
-                  </button>
-                )}
-              </div>
+                    onChange={(e) => setInput(e.target.value)}
+                  />
+                  <span className="token-pill">
+                    <TokenDot symbol={tab.unit} />
+                    {tab.unit}
+                  </span>
+                </span>
+                <span className="swap-bottom">
+                  <span>
+                    <Icon name="lock" size={12} /> 보내기 전에 브라우저에서 암호화돼요
+                  </span>
+                </span>
+              </label>
               {input && parsed && "error" in parsed && <span className="error small">{parsed.error}</span>}
               {warning && <span className="warn small">{warning}</span>}
-            </label>
+            </div>
           )}
 
           <button
@@ -258,7 +292,8 @@ export function ActionsCard({ position, onActivity }: { position: Position; onAc
             className="btn primary wide"
             disabled={busy || (tab.unit !== undefined && (!parsed || "error" in parsed))}
           >
-            {busy ? STEP_TEXT[step] : tab.unit ? `🔒 암호화해서 ${tab.label}` : tab.label}
+            {!busy && <Icon name="lock" />}
+            {busy ? STEP_TEXT[step] : tab.unit ? `암호화해서 ${tab.label}` : tab.label}
           </button>
         </form>
       )}
@@ -283,7 +318,7 @@ export function ActionsCard({ position, onActivity }: { position: Position; onAc
           {lastTx && (
             <div className="explorer-box">
               <a className="btn ghost small" href={txUrl(lastTx.hash)} target="_blank" rel="noreferrer">
-                Etherscan에서 이 거래 확인 ↗
+                Etherscan에서 이 거래 확인 <Icon name="external" size={12} />
               </a>
               {lastTx.handle && (
                 <p className="muted small">
@@ -302,7 +337,7 @@ export function ActionsCard({ position, onActivity }: { position: Position; onAc
 
 function TabHelp({ kind, position }: { kind: Kind; position: Position }) {
   const v = position.values;
-  const show = (x: bigint | undefined, unit: string) => (x === undefined ? "🔒" : `${formatAmount(x)} ${unit}`);
+  const show = (x: bigint | undefined, unit: string) => (x === undefined ? "••••" : `${formatAmount(x)} ${unit}`);
   switch (kind) {
     case "deposit":
       return (
