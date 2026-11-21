@@ -2,7 +2,7 @@ import type { Address } from "viem";
 
 import deployments from "./deployments.json";
 
-export { poolAbi, tokenAbi } from "./abis";
+export { oracleAbi, poolAbi, tokenAbi } from "./abis";
 
 export type ContractAddresses = {
   MockETH: Address;

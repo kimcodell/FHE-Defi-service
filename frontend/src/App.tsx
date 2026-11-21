@@ -6,11 +6,13 @@ import { ActivityCard } from "./components/ActivityCard";
 import { useActivityLog } from "./hooks/useActivityLog";
 import { Header } from "./components/Header";
 import { LiquidationCheckCard } from "./components/LiquidationCheckCard";
+import { OraclePage } from "./components/OraclePage";
 import { PositionCard } from "./components/PositionCard";
 import { getAddresses } from "./contracts";
 import { usePosition } from "./hooks/usePosition";
 import { Icon, TokenDot } from "./components/Icon";
 import { addressUrl } from "./lib/explorer";
+import { useRoute } from "./lib/route";
 import { hasBrowserWallet } from "./lib/wallet";
 
 export default function App() {
@@ -18,12 +20,15 @@ export default function App() {
   const addresses = getAddresses(chainId);
   const position = usePosition(addresses);
   const activityLog = useActivityLog(chainId, address);
+  const route = useRoute();
 
   return (
     <div className="page">
-      <Header />
+      <Header route={route} />
       <main>
-        {!isConnected ? (
+        {route === "oracle" ? (
+          <OraclePage addresses={getAddresses(chainId ?? sepolia.id)} position={position} />
+        ) : !isConnected ? (
           <Welcome />
         ) : chainId !== sepolia.id ? (
           <WrongNetwork />

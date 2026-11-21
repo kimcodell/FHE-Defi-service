@@ -3,10 +3,16 @@ import { sepolia } from "wagmi/chains";
 
 import { addressUrl } from "../lib/explorer";
 import { shortHex } from "../lib/units";
+import { type Route, routeHref } from "../lib/route";
 import { hasBrowserWallet } from "../lib/wallet";
 import { BrandMark, Icon } from "./Icon";
 
-export function Header() {
+const NAV: { route: Route; label: string }[] = [
+  { route: "lend", label: "대출" },
+  { route: "oracle", label: "가격 오라클" },
+];
+
+export function Header({ route }: { route: Route }) {
   const { address, isConnected, chainId } = useConnection();
   const connectors = useConnectors();
   const connect = useConnect();
@@ -23,6 +29,14 @@ export function Header() {
           <p className="brand-sub">금액이 암호화된 담보 대출 · Zama FHE</p>
         </div>
       </div>
+
+      <nav className="nav" aria-label="화면">
+        {NAV.map((n) => (
+          <a key={n.route} href={routeHref(n.route)} className={n.route === route ? "active" : undefined}>
+            {n.label}
+          </a>
+        ))}
+      </nav>
 
       {isConnected && address ? (
         <div className="wallet">
